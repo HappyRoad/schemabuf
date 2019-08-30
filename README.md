@@ -1,3 +1,7 @@
+fork from schemabuf, but do some optimization as follow:
+1. add field comment
+2. add require / optional
+
 # schemabuf
 
 [![GoDoc](https://godoc.org/github.com/mcos/schemabuf/schemabuf?status.svg)](https://godoc.org/github.com/mcos/schemabuf/schemabuf)
