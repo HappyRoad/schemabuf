@@ -104,7 +104,7 @@ func dbSchema(db *sql.DB) (string, error) {
 
 func dbColumns(db *sql.DB, schema string) ([]Column, error) {
 	q := "SELECT TABLE_NAME, COLUMN_NAME, IS_NULLABLE, DATA_TYPE, " +
-		"CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, COLUMN_TYPE " +
+		"CHARACTER_MAXIMUM_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, COLUMN_TYPE, COLUMN_COMMENT " +
 		"FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? ORDER BY TABLE_NAME, ORDINAL_POSITION"
 
 	rows, err := db.Query(q, schema)
@@ -118,7 +118,7 @@ func dbColumns(db *sql.DB, schema string) ([]Column, error) {
 	for rows.Next() {
 		cs := Column{}
 		err := rows.Scan(&cs.TableName, &cs.ColumnName, &cs.IsNullable, &cs.DataType,
-			&cs.CharacterMaximumLength, &cs.NumericPrecision, &cs.NumericScale, &cs.ColumnType)
+			&cs.CharacterMaximumLength, &cs.NumericPrecision, &cs.NumericScale, &cs.ColumnType, &cs.ColumnComment)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -344,14 +344,16 @@ func (m *Message) AppendField(mf MessageField) error {
 
 // MessageField represents the field of a message.
 type MessageField struct {
-	Typ  string
+	Type  string
 	Name string
+	Comment string
+	IsNullable bool
 	tag  int
 }
 
 // NewMessageField creates a new message field.
-func NewMessageField(typ, name string, tag int) MessageField {
-	return MessageField{typ, name, tag}
+func NewMessageField(typeName, name, comment string, isNullable bool, tag int) MessageField {
+	return MessageField{typeName, name, comment, isNullable, tag}
 }
 
 // Tag returns the unique numbered tag of the message field.
@@ -361,7 +363,11 @@ func (f MessageField) Tag() int {
 
 // String returns a string representation of a message field.
 func (f MessageField) String() string {
-	return fmt.Sprintf("%s %s = %d", f.Typ, f.Name, f.tag)
+	optional := "optional"
+	if !f.IsNullable {
+		optional = "required"
+	}
+	return fmt.Sprintf("// %s\n%s%s %s %s = %d", f.Comment, indent, optional, f.Type, f.Name, f.tag)
 }
 
 // Column represents a database column.
@@ -374,6 +380,7 @@ type Column struct {
 	NumericPrecision       sql.NullInt64
 	NumericScale           sql.NullInt64
 	ColumnType             string
+	ColumnComment		   string
 }
 
 // parseColumn parses a column and inserts the relevant fields in the Message. If an enumerated type is encountered, an Enum will
@@ -420,7 +427,7 @@ func parseColumn(s *Schema, msg *Message, col Column) error {
 		return fmt.Errorf("no compatible protobuf type found for `%s`. column: `%s`.`%s`", col.DataType, col.TableName, col.ColumnName)
 	}
 
-	field := NewMessageField(fieldType, col.ColumnName, len(msg.Fields)+1)
+	field := NewMessageField(fieldType, col.ColumnName, col.ColumnComment, col.IsNullable=="YES", len(msg.Fields)+1)
 
 	err := msg.AppendField(field)
 	if nil != err {
